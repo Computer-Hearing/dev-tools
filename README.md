@@ -75,7 +75,7 @@ docker compose up -d
 Вариант Swarm (stack):
 
 ```bash
-docker stack deploy -c docker-stack.yml tool
+docker stack deploy -c docker-stack.yml dev-tools
 ```
 
 Stopping (compose):
