@@ -201,6 +201,7 @@ services:
       - --backend-store-uri=postgresql://mlflow:mlflow@postgres:5432/mlflow
       - --default-artifact-root=s3://mlflow
     environment:
+      - MLFLOW_SERVER_ALLOWED_HOSTS=*
       - MLFLOW_BACKEND_STORE_URI=postgresql://mlflow:mlflow@postgres:5432/mlflow
       - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
       - AWS_ACCESS_KEY_ID=minioadmin
