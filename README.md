@@ -75,8 +75,25 @@ docker compose up -d
 Вариант Swarm (stack):
 
 ```bash
-docker stack deploy -c docker-stack.yml dev-tools
+docker stack deploy -c docker-stack.yml tool
 ```
+
+### Регистрация конфигов (только для swarm)
+
+Swarm не поддерживает локальные bind-пути и `env_file` — все файлы конфигурации передаются через `docker config create`. Перед первым деплоем стека (или после изменения любого файла конфига) выполните:
+
+```bash
+docker config create caddy_caddyfile ./caddy/Caddyfile
+docker config create prometheus_conf ./prometheus/prometheus.yml
+docker config create prometheus_alerts ./prometheus/alertmanager.yml
+docker config create grafana_datasource ./grafana/provisioning/datasources/prometheus.yml
+docker config create grafana_dashboards_provider ./grafana/provisioning/dashboards/dashboards.yml
+docker config create postgres_init_mlflow ./postgres/initdb/01-create-mlflow.sql
+```
+
+> При изменении конфига создайте его заново с тем же именем с флагом `--force` (`docker config create --force ...`) либо удалите старый `docker config rm <name>`, а затем передеплойстек: `docker stack deploy -c docker-stack.yml tool`.
+>
+> Имена конфигов, объявленных в `configs:` в `docker-stack.yml`, должны существовать в кластере, иначе деплой упадёт.
 
 Stopping (compose):
 
@@ -103,8 +120,8 @@ docker stack rm tool
 | `http://localhost:8085` | Portainer |
 | `http://localhost:8086` | Adminer |
 
-> Порты/поддомены задаются в `caddy/Caddyfile`. Заменить `localhost:<port>` на свои поддомены при необходимости, например:
-> `grafana.kuronami.fun { reverse_proxy grafana:3000 }`
+> Порты/поддомены задаются в `caddy/Caddyfile`. Замените `localhost:<port>` на свои домены, например:
+> `grafana.example.com { reverse_proxy grafana:3000 }`
 
 ## Внутренние сервисы
 
@@ -123,7 +140,7 @@ docker stack rm tool
 По умолчанию логин/пароль `admin` / `admin`. Сгенерируйте новый bcrypt-хеш:
 
 ```bash
-docker run --rm caddy caddy hash-password --plaintext 'мега_пароль'
+docker run --rm caddy caddy hash-password --plaintext 'ваш_пароль'
 ```
 
 Вставьте полученный хеш в нужные блоки `basicauth` в `caddy/Caddyfile`.
@@ -134,7 +151,7 @@ docker run --rm caddy caddy hash-password --plaintext 'мега_пароль'
 
 ### Grafana
 
-Дашборд Grafana использует `admin` / `admin` (env `GF_SECURITY_ADMIN_USER` / `GF_SECURITY_ADMIN_PASSWORD`). Сменить перед деплоем при необходимости.
+Дашборд Grafana использует `admin` / `admin` (env `GF_SECURITY_ADMIN_USER` / `GF_SECURITY_ADMIN_PASSWORD`). Смените перед деплоем.
 
 ### PostgreSQL
 
@@ -187,7 +204,7 @@ with mlflow.start_run():
     deploy:
       placement:
         constraints:
-          - node.role == worker
-          - node.performance == medium
+          - node.lables.role == worker
+          - node.labels.performance == medium
 ```
 Так ограничиваются ноды, на которых запускается контейнер. При деполе убедиться, что у нод есть нужные лейблы.
