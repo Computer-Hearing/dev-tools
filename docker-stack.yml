@@ -306,7 +306,7 @@ services:
   # PostgreSQL — БД для MLflow (и общая на будущее)
   # ------------------------------------------------------------------
   postgres:
-    image: postgres:latest
+    image: postgres:17
     networks:
       - tool-net
     environment:
