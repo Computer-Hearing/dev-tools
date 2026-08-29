@@ -68,8 +68,8 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == manager
-          - node.performance == low
+          - node.labels.role == manager
+          - node.labels.performance == low
       restart_policy:
         condition: any
 
@@ -92,8 +92,8 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == worker
-          - node.performance == medium
+          - node.labels.role == worker
+          - node.labels.performance == medium
       restart_policy:
         condition: any
 
@@ -114,8 +114,8 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == worker
-          - node.performance == medium
+          - node.labels.role == worker
+          - node.labels.performance == medium
       restart_policy:
         condition: any
 
@@ -135,8 +135,8 @@ services:
       mode: global
       placement:
         constraints:
-          - node.role == worker
-          - node.performance == medium
+          - node.labels.role == worker
+          - node.labels.performance == medium
       restart_policy:
         condition: any
 
@@ -157,8 +157,8 @@ services:
       mode: global
       placement:
         constraints:
-          - node.role == worker
-          - node.performance == medium
+          - node.labels.role == worker
+          - node.labels.performance == medium
       restart_policy:
         condition: any
 
@@ -182,8 +182,8 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == worker
-          - node.performance == medium
+          - node.labels.role == worker
+          - node.labels.performance == medium
       restart_policy:
         condition: any
 
@@ -203,8 +203,8 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == worker
-          - node.performance == medium
+          - node.labels.role == worker
+          - node.labels.performance == medium
       restart_policy:
         condition: any
 
@@ -224,8 +224,8 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == worker
-          - node.performance == medium
+          - node.labels.role == worker
+          - node.labels.performance == medium
       restart_policy:
         condition: none
 
@@ -244,8 +244,8 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == worker
-          - node.performance == medium
+          - node.labels.role == worker
+          - node.labels.performance == medium
       restart_policy:
         condition: any
 
@@ -288,8 +288,8 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == worker
-          - node.performance == medium
+          - node.labels.role == worker
+          - node.labels.performance == medium
       restart_policy:
         condition: any
 
@@ -307,7 +307,7 @@ services:
   #     replicas: 1
   #     placement:
   #       constraints:
-  #         - node.role == worker
+  #         - node.labels.role == worker
   #     restart_policy:
   #       condition: any
 
