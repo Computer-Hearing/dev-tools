@@ -200,6 +200,8 @@ services:
       - --port=5000
       - --backend-store-uri=postgresql://mlflow:mlflow@postgres:5432/mlflow
       - --default-artifact-root=s3://mlflow
+      - --allowed-hosts=*
+      - --cors-allowed-origins=*
     environment:
       - MLFLOW_SERVER_ALLOWED_HOSTS=*
       - MLFLOW_BACKEND_STORE_URI=postgresql://mlflow:mlflow@postgres:5432/mlflow
