@@ -27,6 +27,23 @@ volumes:
   caddy_data:
   caddy_config:
 
+# Декларируем конфиги. В swarm локальные bind-пути недоступны —
+# файлы должны быть зарегистрированы через `docker config create`:
+#   docker config create caddy_caddyfile ./caddy/Caddyfile
+configs:
+  caddy_caddyfile:
+    file: ./caddy/Caddyfile
+  prometheus_conf:
+    file: ./prometheus/prometheus.yml
+  prometheus_alerts:
+    file: ./prometheus/alertmanager.yml
+  grafana_datasource:
+    file: ./grafana/provisioning/datasources/prometheus.yml
+  grafana_dashboards_provider:
+    file: ./grafana/provisioning/dashboards/dashboards.yml
+  postgres_init_mlflow:
+    file: ./postgres/initdb/01-create-mlflow.sql
+
 services:
   # ----------------------------------------------------------------------------------------------------------------------------
   # Caddy — ingress / reverse proxy (единственный публикуется наружу) (убрать порты все корме 80 и 443 при деплое с поддоменами)
@@ -50,7 +67,7 @@ services:
         mode: host
       - target: 8083
         published: 8083
-        mode: host     
+        mode: host
       - target: 8084
         published: 8084
         mode: host
@@ -59,9 +76,11 @@ services:
         mode: host
       - target: 8086
         published: 8086
-        mode: host     
+        mode: host
+    configs:
+      - source: caddy_caddyfile
+        target: /etc/caddy/Caddyfile
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     deploy:
@@ -84,9 +103,12 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+    configs:
+      - source: grafana_datasource
+        target: /etc/grafana/provisioning/datasources/prometheus.yml
+      - source: grafana_dashboards_provider
+        target: /etc/grafana/provisioning/dashboards/dashboards.yml
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     deploy:
       replicas: 1
@@ -107,8 +129,10 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
+    configs:
+      - source: prometheus_conf
+        target: /etc/prometheus/prometheus.yml
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     deploy:
       replicas: 1
@@ -176,8 +200,14 @@ services:
       - --port=5000
       - --backend-store-uri=postgresql://mlflow:mlflow@postgres:5432/mlflow
       - --default-artifact-root=s3://mlflow
-    env_file:
-      - ./mlflow/mlflow.env
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=postgresql://mlflow:mlflow@postgres:5432/mlflow
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - MLFLOW_S3_BUCKET=mlflow
+      - MLFLOW_S3_IGNORE_TLS=true
+      - MLFLOW_TRACKING_URI=http://0.0.0.0:5000
     deploy:
       replicas: 1
       placement:
@@ -195,8 +225,9 @@ services:
     networks:
       - tool-net
     command: server /data --console-address ":9001"
-    env_file:
-      - ./minio/minio.env
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
     volumes:
       - minio-data:/data
     deploy:
@@ -218,8 +249,9 @@ services:
       - >
         until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 2; done;
         mc mb --ignore-existing local/mlflow;
-    env_file:
-      - ./minio/minio.env
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
     deploy:
       replicas: 1
       placement:
@@ -281,8 +313,10 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=postgres
+    configs:
+      - source: postgres_init_mlflow
+        target: /docker-entrypoint-initdb.d/01-create-mlflow.sql
     volumes:
-      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
       - postgres-data:/var/lib/postgresql/data
     deploy:
       replicas: 1
