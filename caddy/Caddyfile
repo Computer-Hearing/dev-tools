@@ -16,8 +16,7 @@
 # ---------------------------------------------------------------
 # Grafana — дашборды
 # ---------------------------------------------------------------
-# убрать http:// для поддоменов или внутреннего tls
-http://localhost:8081 {
+:8081 {
     # tls internal делает самоподписанный сертификат, раскомментировать снизу если это надо
     # tls internal
 	basicauth * {
@@ -29,7 +28,7 @@ http://localhost:8081 {
 # ---------------------------------------------------------------
 # Prometheus — метрики
 # ---------------------------------------------------------------
-http://localhost:8082 {
+:8082 {
 	basicauth * {
 		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
 	}
@@ -39,7 +38,7 @@ http://localhost:8082 {
 # ---------------------------------------------------------------
 # MLflow — tracking server
 # ---------------------------------------------------------------
-http://localhost:8083 {
+:8083 {
 	basicauth * {
 		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
 	}
@@ -49,7 +48,7 @@ http://localhost:8083 {
 # ---------------------------------------------------------------
 # MinIO — S3-хранилище (Web-UI)
 # ---------------------------------------------------------------
-http://localhost:8084 {
+:8084 {
 	basicauth * {
 		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
 	}
@@ -59,7 +58,7 @@ http://localhost:8084 {
 # ---------------------------------------------------------------
 # Portainer — управление Docker/Swarm
 # ---------------------------------------------------------------
-http://localhost:8085 {
+:8085 {
 	basicauth * {
 		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
 	}
@@ -69,7 +68,7 @@ http://localhost:8085 {
 # ---------------------------------------------------------------
 # Adminer — управление БД
 # ---------------------------------------------------------------
-http://localhost:8086 {
+:8086 {
 	basicauth * {
 		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
 	}
