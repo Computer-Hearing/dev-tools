@@ -180,3 +180,14 @@ with mlflow.start_run():
 
 - **Redis** — раскомментируйте блок `redis` в `docker-compose.yml` / `docker-stack.yml`, при необходимости задайте параметры в `redis/redis.env`.
 - **Alertmanager** — раскомментируйте блок `alertmanager`, конфиг уже лежит в `prometheus/alertmanager.yml`.
+
+## Лейблы stack
+С docker-stack.yaml контейнеры разворачиваются на нодах в соответствии с лейблами. Лейбл назначается в блок deploy/placement/constraints.
+```
+    deploy:
+      placement:
+        constraints:
+          - node.role == worker
+          - node.performance == medium
+```
+Так ограничиваются ноды, на которых запускается контейнер. При деполе убедиться, что у нод есть нужные лейблы.
