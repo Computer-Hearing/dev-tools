@@ -29,7 +29,7 @@ http://localhost:8081 {
 # ---------------------------------------------------------------
 # Prometheus — метрики
 # ---------------------------------------------------------------
-localhost:8082 {
+http://localhost:8082 {
 	basicauth * {
 		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
 	}
@@ -39,7 +39,7 @@ localhost:8082 {
 # ---------------------------------------------------------------
 # MLflow — tracking server
 # ---------------------------------------------------------------
-localhost:8083 {
+http://localhost:8083 {
 	basicauth * {
 		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
 	}
@@ -49,7 +49,7 @@ localhost:8083 {
 # ---------------------------------------------------------------
 # MinIO — S3-хранилище (Web-UI)
 # ---------------------------------------------------------------
-localhost:8084 {
+http://localhost:8084 {
 	basicauth * {
 		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
 	}
@@ -59,7 +59,7 @@ localhost:8084 {
 # ---------------------------------------------------------------
 # Portainer — управление Docker/Swarm
 # ---------------------------------------------------------------
-localhost:8085 {
+http://localhost:8085 {
 	basicauth * {
 		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
 	}
@@ -69,7 +69,7 @@ localhost:8085 {
 # ---------------------------------------------------------------
 # Adminer — управление БД
 # ---------------------------------------------------------------
-localhost:8086 {
+http://localhost:8086 {
 	basicauth * {
 		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
 	}
