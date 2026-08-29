@@ -1,0 +1,326 @@
+# Docker Stack (Swarm) — вариант для `docker stack deploy -c docker-stack.yml <name>`.
+# Swarm не умеет билдить — все сервисы используют готовые образы.
+# Экспортёры работают в global-режиме (по одному на ноду),
+# Portainer/MLflow/Postgres закреплены на manager-нодах.
+#
+# Перед запуском убедиться, что есть внешняя overlay-сеть в кластере:
+#   docker network create --driver overlay --attachable tool-net
+#
+# Запуск:
+#   docker stack deploy -c docker-stack.yml tool
+#
+# У каждого сервиса своя папка конфигов в этом каталоге.
+
+version: "3.8"
+
+networks:
+  tool-net:
+    external: true
+
+volumes:
+  minio-data:
+  postgres-data:
+  grafana-data:
+  prometheus-data:
+  portainer-data:
+  redis-data:
+  caddy_data:
+  caddy_config:
+
+services:
+  # ----------------------------------------------------------------------------------------------------------------------------
+  # Caddy — ingress / reverse proxy (единственный публикуется наружу) (убрать порты все корме 80 и 443 при деплое с поддоменами)
+  # ----------------------------------------------------------------------------------------------------------------------------
+  caddy:
+    image: caddy:latest
+    networks:
+      - tool-net
+    ports:
+      - target: 80
+        published: 80
+        mode: host
+      - target: 443
+        published: 443
+        mode: host
+      - target: 8081
+        published: 8081
+        mode: host
+      - target: 8082
+        published: 8082
+        mode: host
+      - target: 8083
+        published: 8083
+        mode: host     
+      - target: 8084
+        published: 8084
+        mode: host
+      - target: 8085
+        published: 8085
+        mode: host
+      - target: 8086
+        published: 8086
+        mode: host     
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+          - node.performance == low
+      restart_policy:
+        condition: any
+
+  # ------------------------------------------------------------------
+  # Grafana — дашборды и визуализация
+  # ------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    networks:
+      - tool-net
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+          - node.performance == medium
+      restart_policy:
+        condition: any
+
+  # ------------------------------------------------------------------
+  # Prometheus — сбор и хранение метрик
+  # ------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    networks:
+      - tool-net
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+          - node.performance == medium
+      restart_policy:
+        condition: any
+
+  # ------------------------------------------------------------------
+  # Node Exporter — метрики ВСЕХ хостов кластера (global mode)
+  # ------------------------------------------------------------------
+  node-exporter:
+    image: prom/node-exporter:latest
+    networks:
+      - tool-net
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.role == worker
+          - node.performance == medium
+      restart_policy:
+        condition: any
+
+  # ------------------------------------------------------------------
+  # cAdvisor — метрики контейнеров ВСЕХ хостов кластера (global mode)
+  # ------------------------------------------------------------------
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    networks:
+      - tool-net
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.role == worker
+          - node.performance == medium
+      restart_policy:
+        condition: any
+
+  # ------------------------------------------------------------------
+  # MLflow — tracking server (бэкенд: PostgreSQL, артефакты: MinIO)
+  # ------------------------------------------------------------------
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    networks:
+      - tool-net
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=postgresql://mlflow:mlflow@postgres:5432/mlflow
+      - --default-artifact-root=s3://mlflow
+    env_file:
+      - ./mlflow/mlflow.env
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+          - node.performance == medium
+      restart_policy:
+        condition: any
+
+  # ------------------------------------------------------------------
+  # MinIO — S3-совместимое хранилище артефактов
+  # ------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    networks:
+      - tool-net
+    command: server /data --console-address ":9001"
+    env_file:
+      - ./minio/minio.env
+    volumes:
+      - minio-data:/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+          - node.performance == medium
+      restart_policy:
+        condition: any
+
+  # Одноразовый сервис: создаёт бакет mlflow в MinIO
+  minio-init:
+    image: minio/mc:latest
+    networks:
+      - tool-net
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 2; done;
+        mc mb --ignore-existing local/mlflow;
+    env_file:
+      - ./minio/minio.env
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+          - node.performance == medium
+      restart_policy:
+        condition: none
+
+  # ------------------------------------------------------------------
+  # Portainer — управление Docker/Swarm (на manager-ноде)
+  # ------------------------------------------------------------------
+  portainer:
+    image: portainer/portainer-ce:latest
+    networks:
+      - tool-net
+    command: -H unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - portainer-data:/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+          - node.performance == medium
+      restart_policy:
+        condition: any
+
+  # ------------------------------------------------------------------
+  # Adminer — управление БД (postgres)
+  # ------------------------------------------------------------------
+  adminer:
+    image: adminer:latest
+    networks:
+      - tool-net
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+      - ADMINER_DEFAULT_USER=mlflow
+      - ADMINER_DEFAULT_PASSWORD=mlflow
+      - ADMINER_DEFAULT_DB=mlflow
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+          - node.performance == medium
+      restart_policy:
+        condition: any
+
+  # ------------------------------------------------------------------
+  # PostgreSQL — БД для MLflow (и общая на будущее)
+  # ------------------------------------------------------------------
+  postgres:
+    image: postgres:latest
+    networks:
+      - tool-net
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - postgres-data:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+          - node.performance == medium
+      restart_policy:
+        condition: any
+
+  # ------------------------------------------------------------------
+  # Redis — закомментирован (активировать при необходимости)
+  # ------------------------------------------------------------------
+  # redis:
+  #   image: redis:latest
+  #   networks:
+  #     - tool-net
+  #   command: redis-server --appendonly yes
+  #   volumes:
+  #     - redis-data:/data
+  #   deploy:
+  #     replicas: 1
+  #     placement:
+  #       constraints:
+  #         - node.role == worker
+  #     restart_policy:
+  #       condition: any
+
+  # ------------------------------------------------------------------
+  # Prometheus Alertmanager — уведомления
+  # ------------------------------------------------------------------
+  # alertmanager:
+  #   image: prom/alertmanager:latest
+  #   networks:
+  #     - tool-net
+  #   volumes:
+  #     - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+  #   deploy:
+  #     replicas: 1
+  #     restart_policy:
+  #       condition: any

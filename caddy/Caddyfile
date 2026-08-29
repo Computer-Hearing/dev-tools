@@ -1,0 +1,84 @@
+# Caddy ingress-конфиг.
+# Каждый сервис публикуется на своём локальном порту.
+# Заменить "localhost:<порт>" на свои поддомены, например:
+#   grafana.kuronami.fun {
+#       reverse_proxy grafana:3000
+#   }
+#
+# Basic auth (admin / admin) вешается на все web-UI, кроме exporters.
+# Заменить хеш на свой, сгенерировав его через:  caddy hash-password --plaintext <password>
+
+{
+	# Глобальная конфигурация (если понадобится — email для Let's Encrypt и т.п.)
+	# email you@example.com
+}
+
+# ---------------------------------------------------------------
+# Grafana — дашборды
+# ---------------------------------------------------------------
+localhost:8081 {
+	basicauth * {
+		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
+	}
+	reverse_proxy grafana:3000
+}
+
+# ---------------------------------------------------------------
+# Prometheus — метрики
+# ---------------------------------------------------------------
+localhost:8082 {
+	basicauth * {
+		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
+	}
+	reverse_proxy prometheus:9090
+}
+
+# ---------------------------------------------------------------
+# MLflow — tracking server
+# ---------------------------------------------------------------
+localhost:8083 {
+	basicauth * {
+		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
+	}
+	reverse_proxy mlflow:5000
+}
+
+# ---------------------------------------------------------------
+# MinIO — S3-хранилище (Web-UI)
+# ---------------------------------------------------------------
+localhost:8084 {
+	basicauth * {
+		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
+	}
+	reverse_proxy minio:9001
+}
+
+# ---------------------------------------------------------------
+# Portainer — управление Docker/Swarm
+# ---------------------------------------------------------------
+localhost:8085 {
+	basicauth * {
+		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
+	}
+	reverse_proxy portainer:9443
+}
+
+# ---------------------------------------------------------------
+# Adminer — управление БД
+# ---------------------------------------------------------------
+localhost:8086 {
+	basicauth * {
+		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
+	}
+	reverse_proxy adminer:8080
+}
+
+# ---------------------------------------------------------------
+# Prometheus Alertmanager — уведомления (закомментировано, раскомментировать при необходимости)
+# ---------------------------------------------------------------
+# localhost:8087 {
+# 	basicauth * {
+# 		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
+# 	}
+# 	reverse_proxy alertmanager:9093
+# }

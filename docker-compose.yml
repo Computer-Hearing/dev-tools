@@ -1,0 +1,241 @@
+# Docker Compose v3 — совместим и с `docker compose`, (частично) и с `docker stack deploy`.
+# Для swarm использовать нужно docker-stack.yml (учитывает global-режим exporters и constraints).
+#
+# Перед запуском убедиться, что есть внешняя (overlay) сеть в кластере:
+#   docker network create --driver overlay --attachable tool-net
+#
+# У каждого сервиса своя папка конфигов в этом каталоге.
+
+version: "3.8"
+
+networks:
+  tool-net:
+    external: true
+
+volumes:
+  minio-data:
+  postgres-data:
+  grafana-data:
+  prometheus-data:
+  portainer-data:
+  redis-data:
+  caddy_data:
+  caddy_config:
+
+services:
+  # ------------------------------------------------------------------
+  # Caddy — ingress / reverse proxy (единственный публикуется наружу)
+  # ------------------------------------------------------------------
+  caddy:
+    image: caddy:latest
+    container_name: caddy
+    networks:
+      - tool-net
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Grafana — дашборды и визуализация
+  # ------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    networks:
+      - tool-net
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Prometheus — сбор и хранение метрик
+  # ------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    networks:
+      - tool-net
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Node Exporter — метрики хоста (в swarm: global mode, см. stack)
+  # ------------------------------------------------------------------
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    networks:
+      - tool-net
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # cAdvisor — метрики контейнеров (в swarm: global mode, см. stack)
+  # ------------------------------------------------------------------
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    networks:
+      - tool-net
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # MLflow — tracking server (бэкенд: PostgreSQL, артефакты: MinIO)
+  # ------------------------------------------------------------------
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: mlflow
+    networks:
+      - tool-net
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=postgresql://mlflow:mlflow@postgres:5432/mlflow
+      - --default-artifact-root=s3://mlflow
+    env_file:
+      - ./mlflow/mlflow.env
+    depends_on:
+      - postgres
+      - minio
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # MinIO — S3-совместимое хранилище артефактов
+  # ------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    networks:
+      - tool-net
+    command: server /data --console-address ":9001"
+    env_file:
+      - ./minio/minio.env
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Init-контейнер: создаёт бакет mlflow в MinIO
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    networks:
+      - tool-net
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 2; done;
+        mc mb --ignore-existing local/mlflow;
+    env_file:
+      - ./minio/minio.env
+    depends_on:
+      - minio
+    restart: "no"
+
+  # ------------------------------------------------------------------
+  # Portainer — управление Docker/Swarm
+  # ------------------------------------------------------------------
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    networks:
+      - tool-net
+    command: -H unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Adminer — управление БД (postgres)
+  # ------------------------------------------------------------------
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    networks:
+      - tool-net
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+      - ADMINER_DEFAULT_USER=mlflow
+      - ADMINER_DEFAULT_PASSWORD=mlflow
+      - ADMINER_DEFAULT_DB=mlflow
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # PostgreSQL — БД для MLflow (и общая на будущее)
+  # ------------------------------------------------------------------
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    networks:
+      - tool-net
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Redis — закомментирован (активируйте при необходимости)
+  # ------------------------------------------------------------------
+  # redis:
+  #   image: redis:latest
+  #   container_name: redis
+  #   networks:
+  #     - tool-net
+  #   command: redis-server --appendonly yes
+  #   volumes:
+  #     - redis-data:/data
+  #   restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Prometheus Alertmanager — уведомления (закомментирован, опционально)
+  # ------------------------------------------------------------------
+  # alertmanager:
+  #   image: prom/alertmanager:latest
+  #   container_name: alertmanager
+  #   networks:
+  #     - tool-net
+  #   volumes:
+  #     - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+  #   restart: unless-stopped
+

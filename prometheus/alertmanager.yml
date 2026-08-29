@@ -1,0 +1,21 @@
+# Prometheus Alertmanager конфигурация.
+# Закомментирован в compose/stack — раскомментировать сервис alertmanager при необходимости.
+# Базовый пример: все алерты уходят в один receiver.
+
+global:
+  resolve_timeout: 5m
+  # smtp_smarthost: 'smtp.example.com:587'
+  # smtp_from: 'alertmanager@example.com'
+
+route:
+  group_by: ['alertname', 'job']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: "default"
+
+receivers:
+  - name: "default"
+    # Пример: вебхук (например Slack/TG).
+    # webhook_configs:
+    #   - url: "http://localhost:8080/alert"
