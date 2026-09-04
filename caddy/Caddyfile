@@ -5,82 +5,47 @@
 #       reverse_proxy grafana:3000
 #   }
 #
-# Basic auth (admin / admin) вешается на все web-UI, кроме exporters.
+# Basic auth (admin / admi	n) вешается на все web-UI, кроме exporters.
 # Заменить хеш на свой, сгенерировав его через:  caddy hash-password --plaintext <password>
 
-{
-	# Глобальная конфигурация (если понадобится — email для Let's Encrypt и т.п.)
-	# email you@example.com
+# глобальный хендлер перехвата пятисоток. В хендлерах просто можно написать вначале: import handle_502
+(handle_502) {
+    handle_errors {
+        @caddy_error expression {err.status_code} == 502
+        handle @caddy_error {
+            redir https://kuronami-images.storage.yandexcloud.net/502.html 302
+        }
+    }
+}
+# в кажом хендлере указывается домен (или :80 если http нужно) дальше логика. Данный хендлер переписывает кждый запрос, перенаправляя его на https://kuronami-images.storage.yandexcloud.net/404.html
+www.kuronami.fun {
+    rewrite * /404.html
+    reverse_proxy https://kuronami-images.storage.yandexcloud.net {
+        header_up Host kuronami-images.storage.yandexcloud.net
+    }
+
 }
 
-# ---------------------------------------------------------------
-# Grafana — дашборды
-# ---------------------------------------------------------------
-:8081 {
-    # tls internal делает самоподписанный сертификат, раскомментировать снизу если это надо
-    # tls internal
-	basicauth * {
-		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
-	}
-	reverse_proxy grafana:3000
+minio.kuronami.fun {
+       reverse_proxy minio:9000
+}
+auth.kuronami.fun {
+       reverse_proxy auth-proxy-auth-proxy-1:6000
+}
+proxy.kuronami.fun {
+       reverse_proxy auth-proxy-auth-proxy-1:5000
+}
+tools.kuronami.fun {
+       reverse_proxy auth-proxy-auth-proxy-1:5000
 }
 
-# ---------------------------------------------------------------
-# Prometheus — метрики
-# ---------------------------------------------------------------
-:8082 {
-	basicauth * {
-		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
-	}
-	reverse_proxy prometheus:9090
+inference.kuronami.fun {
+    import handle_502
+
+    reverse_proxy inference_caddy:80
+
+    header {
+        Content-Security-Policy "upgrade-insecure-requests"
+    }
 }
 
-# ---------------------------------------------------------------
-# MLflow — tracking server
-# ---------------------------------------------------------------
-:8083 {
-	basicauth * {
-		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
-	}
-	reverse_proxy mlflow:5000
-}
-
-# ---------------------------------------------------------------
-# MinIO — S3-хранилище (Web-UI)
-# ---------------------------------------------------------------
-:8084 {
-	basicauth * {
-		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
-	}
-	reverse_proxy minio:9001
-}
-
-# ---------------------------------------------------------------
-# Portainer — управление Docker/Swarm
-# ---------------------------------------------------------------
-:8085 {
-	basicauth * {
-		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
-	}
-	reverse_proxy portainer:9443
-}
-
-# ---------------------------------------------------------------
-# Adminer — управление БД
-# ---------------------------------------------------------------
-:8086 {
-	basicauth * {
-		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
-	}
-	reverse_proxy adminer:8080
-}
-
-# ---------------------------------------------------------------
-# Prometheus Alertmanager — уведомления (закомментировано, раскомментировать при необходимости)
-# ---------------------------------------------------------------
-# localhost:8087 {
-# 	basicauth * {
-# 		admin $2b$10$LligALheB9PoNLRFoH9hjOWuJIc1CPqV9qcKLLZYiyCWbDcI0KWSm
-# 	}
-# 	reverse_proxy alertmanager:9093
-# }
