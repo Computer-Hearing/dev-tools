@@ -17,7 +17,7 @@ volumes:
   postgres-data:
   grafana-data:
   prometheus-data:
-  yacht_data:
+  portainer_data:
   redis-data:
   caddy_data:
   caddy_config:
@@ -167,17 +167,18 @@ services:
     restart: "no"
 
   # ------------------------------------------------------------------
-  # Yacht — управление Docker/Swarm
+  # Portainer — управление Docker/Swarm
   # ------------------------------------------------------------------
-  yacht:
-    image: selfhostedpro/yacht:latest
-    container_name: yacht
-    restart: unless-stopped
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    networks:
+      - tool-net
+    command: -H unix:///var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - yacht_data:/data
-    env_file:
-      - ./yacht/yacht.env
+      - portainer-data:/data
+    restart: unless-stopped
 
   # ------------------------------------------------------------------
   # Adminer — управление БД (postgres)
