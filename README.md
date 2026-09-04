@@ -13,7 +13,7 @@
 | cadvisor | `gcr.io/cadvisor/cadvisor:latest` | нет | Метрики контейнеров (global mode в swarm) |
 | mlflow | `ghcr.io/mlflow/mlflow:latest` | да | Tracking server (ML-эксперименты) |
 | minio | `minio/minio:latest` | да | S3-хранилище артефактов |
-| yacht | `selfhostedpro/yacht:latest` | да | Управление Docker/Swarm |
+| portainer | `portainer/portainer:latest` | да | Управление Docker/Swarm |
 | adminer | `adminer:latest` | да | Управление БД |
 | postgres | `postgres:latest` | n/a | БД для MLflow |
 | redis | `redis:latest` | — | закомментирован |
@@ -39,7 +39,7 @@ Tool/
 ├── minio/minio.env             # root-креды MinIO
 ├── postgres/initdb/01-create-mlflow.sql  # init бд/юзера mlflow
 ├── redis/redis.env             # (redis закомментирован)
-├── yacht/                  # данные в volume
+├── portainer/                  # данные в volume
 └── adminer/                    # данные в volume
 ```
 
