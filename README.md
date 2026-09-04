@@ -1,25 +1,25 @@
 # Tool — Docker-инфраструктура мониторинга и MLflow
 
-Готовый набор сервисов для развёртывания кластера (Docker Compose / Docker Swarm): ingress через Caddy, мониторинг (Prometheus + Grafana), эксперименты ML (MLflow), S3-хранилище (MinIO) и инструменты управления (Portainer, Adminer).
+Набор сервисов для развёртывания кластера (Docker Compose / Docker Swarm): ingress через Caddy, мониторинг (Prometheus + Grafana), эксперименты ML (MLflow), S3-хранилище (MinIO) и инструменты управления (Yacht, Adminer).
 
 ## Состав сервисов
 
-| Сервис | Образ | Порт (через Caddy) | Basic auth | Примечание |
-|--------|-------|:----------:|:----------:|------------|
-| caddy | `caddy:latest` | 80 / 443 | — | Ingress / reverse proxy |
-| grafana | `grafana/grafana:latest` | `localhost:8081` | да | Дашборды и визуализация |
-| prometheus | `prom/prometheus:latest` | `localhost:8082` | да | Сбор и хранение метрик |
-| node-exporter | `prom/node-exporter:latest` | (внутренний) | нет | Метрики хостов (global mode в swarm) |
-| cadvisor | `gcr.io/cadvisor/cadvisor:latest` | (внутренний) | нет | Метрики контейнеров (global mode в swarm) |
-| mlflow | `ghcr.io/mlflow/mlflow:latest` | `localhost:8083` | да | Tracking server (ML-эксперименты) |
-| minio | `minio/minio:latest` | `localhost:8084` | да | S3-хранилище артефактов |
-| portainer | `portainer/portainer-ce:latest` | `localhost:8085` | да | Управление Docker/Swarm |
-| adminer | `adminer:latest` | `localhost:8086` | да | Управление БД |
-| postgres | `postgres:latest` | (внутренний) | n/a | БД для MLflow |
-| redis | `redis:latest` | — | — | закомментирован |
-| alertmanager | `prom/alertmanager:latest` | `localhost:8087` | да | закомментирован (уведомления) |
+| Сервис | Образ | Basic auth / JWT | Примечание |
+|--------|-------|:----------:|------------|
+| caddy | `caddy:latest` | — | Ingress / reverse proxy |
+| grafana | `grafana/grafana:latest` | да | Дашборды и визуализация |
+| prometheus | `prom/prometheus:latest` | да | Сбор и хранение метрик |
+| node-exporter | `prom/node-exporter:latest` | нет | Метрики хостов (global mode в swarm) |
+| cadvisor | `gcr.io/cadvisor/cadvisor:latest` | нет | Метрики контейнеров (global mode в swarm) |
+| mlflow | `ghcr.io/mlflow/mlflow:latest` | да | Tracking server (ML-эксперименты) |
+| minio | `minio/minio:latest` | да | S3-хранилище артефактов |
+| yacht | `selfhostedpro/yacht:latest` | да | Управление Docker/Swarm |
+| adminer | `adminer:latest` | да | Управление БД |
+| postgres | `postgres:latest` | n/a | БД для MLflow |
+| redis | `redis:latest` | — | закомментирован |
+| alertmanager | `prom/alertmanager:latest` | да | закомментирован (уведомления) |
 
-`node-exporter` и `cadvisor` не имеют Web-UI (отдают `/metrics` по внутренней сети), поэтому не выносятся в ingress и не закрыты basic auth.
+`node-exporter` и `cadvisor` не имеют Web-UI (отдают `/metrics` по внутренней сети), поэтому не выносятся в ingress и не закрыты auth.
 
 ## Структура файлов
 
@@ -39,7 +39,7 @@ Tool/
 ├── minio/minio.env             # root-креды MinIO
 ├── postgres/initdb/01-create-mlflow.sql  # init бд/юзера mlflow
 ├── redis/redis.env             # (redis закомментирован)
-├── portainer/                  # данные в volume
+├── yacht/                  # данные в volume
 └── adminer/                    # данные в volume
 ```
 
@@ -107,19 +107,6 @@ Stopping (stack):
 docker stack rm tool
 ```
 
-## Доступ к сервисам
-
-После запуска Caddy проксирует следующие адреса (логин/пароль везде `admin` / `admin`):
-
-| Адрес | Сервис |
-|-------|--------|
-| `http://localhost:8081` | Grafana |
-| `http://localhost:8082` | Prometheus |
-| `http://localhost:8083` | MLflow |
-| `http://localhost:8084` | MinIO (Web-UI) |
-| `http://localhost:8085` | Portainer |
-| `http://localhost:8086` | Adminer |
-
 > Порты/поддомены задаются в `caddy/Caddyfile`. Замените `localhost:<port>` на свои домены, например:
 > `grafana.example.com { reverse_proxy grafana:3000 }`
 
@@ -127,31 +114,15 @@ docker stack rm tool
 
 Доступны только внутри сети `tool-net` (по имени сервиса), не опубликованы наружу:
 
-- **PostgreSQL** — `postgres:5432` (пользователь `mlflow` / пароль `mlflow`, бд `mlflow`)
+- **PostgreSQL** — `postgres:5432`
 - **MinIO S3** — `minio:9000`
 - **node-exporter** — `node-exporter:9100`
 - **cadvisor** — `cadvisor:8080`
 - **Prometheus** — `prometheus:9090`
 
-## Смена паролей
-
-### Basic auth в Caddy
-
-По умолчанию логин/пароль `admin` / `admin`. Сгенерируйте новый bcrypt-хеш:
-
-```bash
-docker run --rm caddy caddy hash-password --plaintext 'ваш_пароль'
-```
-
-Вставьте полученный хеш в нужные блоки `basicauth` в `caddy/Caddyfile`.
-
 ### MinIO
 
 Креды задаются в `minio/minio.env` (`MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`) и должны совпадать с теми, что настроены для MLflow в `mlflow/mlflow.env` (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
-
-### Grafana
-
-Дашборд Grafana использует `admin` / `admin` (env `GF_SECURITY_ADMIN_USER` / `GF_SECURITY_ADMIN_PASSWORD`). Смените перед деплоем.
 
 ### PostgreSQL
 
@@ -190,13 +161,6 @@ with mlflow.start_run():
 - **Grafana** — визуализация, датасорс Prometheus подключается автоматически.
 
 В swarm-варианте оба экспортёра работают в `mode: global` — по одному на каждой ноде.
-
-Для уведомлений (алертов) включите **alertmanager**: раскомментируйте сервис в compose/stack и настройте receiver'ы в `prometheus/alertmanager.yml` (по умолчанию — пустой webhook).
-
-## Закомментированные сервисы
-
-- **Redis** — раскомментируйте блок `redis` в `docker-compose.yml` / `docker-stack.yml`, при необходимости задайте параметры в `redis/redis.env`.
-- **Alertmanager** — раскомментируйте блок `alertmanager`, конфиг уже лежит в `prometheus/alertmanager.yml`.
 
 ## Лейблы stack
 С docker-stack.yaml контейнеры разворачиваются на нодах в соответствии с лейблами. Лейбл назначается в блок deploy/placement/constraints.
